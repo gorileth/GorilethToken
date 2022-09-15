@@ -2,7 +2,7 @@
 
 // @custom:security-contact security@gorileth.com
 
-pragma solidity ^0.8.17;
+pragma solidity 0.8.17;
 
 
 // LIBRARY
@@ -20,14 +20,6 @@ pragma solidity ^0.8.17;
 abstract contract Context {
     function _msgSender() internal view virtual returns (address) {
         return msg.sender;
-    }
-
-    function _msgData() internal view virtual returns (bytes calldata) {
-        return msg.data;
-    }
-
-    function _msgValue() internal view virtual returns (uint256) {
-        return msg.value;
     }
 }
 
@@ -119,7 +111,7 @@ abstract contract Auth is Context {
      * NOTE: Renouncing ownership will leave the contract without an owner,
      * thereby removing any functionality that is only available to the owner.
      */
-    function renounceOwnership() public virtual onlyOwner {
+    function renounceOwnership() external virtual onlyOwner {
         _transferOwnership(address(0));
     }
 
@@ -127,7 +119,7 @@ abstract contract Auth is Context {
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
      * Can only be called by the current owner.
      */
-    function transferOwnership(address newOwner) public virtual onlyOwner {
+    function transferOwnership(address newOwner) external virtual onlyOwner {
         require(newOwner != address(0), "Ownable: new owner is the zero address");
         _transferOwnership(newOwner);
     }
@@ -546,7 +538,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     /**
      * @dev Returns the name of the token.
      */
-    function name() public view virtual override returns (string memory) {
+    function name() external view virtual override returns (string memory) {
         return _name;
     }
 
@@ -554,7 +546,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      * @dev Returns the symbol of the token, usually a shorter version of the
      * name.
      */
-    function symbol() public view virtual override returns (string memory) {
+    function symbol() external view virtual override returns (string memory) {
         return _symbol;
     }
 
@@ -597,7 +589,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      * - `to` cannot be the zero address.
      * - the caller must have a balance of at least `amount`.
      */
-    function transfer(address to, uint256 amount) public virtual override returns (bool) {
+    function transfer(address to, uint256 amount) external virtual override returns (bool) {
         address owner = _msgSender();
         _transfer(owner, to, amount);
         return true;
@@ -646,7 +638,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
         address from,
         address to,
         uint256 amount
-    ) public virtual override returns (bool) {
+    ) external virtual override returns (bool) {
         address spender = _msgSender();
         _spendAllowance(from, spender, amount);
         _transfer(from, to, amount);
@@ -665,7 +657,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      *
      * - `spender` cannot be the zero address.
      */
-    function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
+    function increaseAllowance(address spender, uint256 addedValue) external virtual returns (bool) {
         address owner = _msgSender();
         _approve(owner, spender, allowance(owner, spender) + addedValue);
         return true;
@@ -685,7 +677,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      * - `spender` must have allowance for the caller of at least
      * `subtractedValue`.
      */
-    function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
+    function decreaseAllowance(address spender, uint256 subtractedValue) external virtual returns (bool) {
         address owner = _msgSender();
         uint256 currentAllowance = allowance(owner, spender);
         require(currentAllowance >= subtractedValue, "ERC20: decreased allowance below zero");
@@ -893,14 +885,14 @@ contract GorilethToken is ERC20, Auth {
     address public treasuryReceiver;
     address public teamReceiver;
 
-    uint256 public xTeam;
-    uint256 public xLiquidity;
+    uint256 public xTeam = 0;
+    uint256 public xLiquidity = 0;
     uint256 public xBuyback = 2;
     uint256 public xTreasury = 2;
     uint256 public xMarketing = 1;
-    uint256 public baseFee = 1;
-    uint256 public totalFee = 10;
-    uint256 public feeDenominator = 100;
+    uint256 public constant BASEFEE = 1;
+    uint256 public constant TOTALFEE = 10;
+    uint256 public constant FEEDENOMINATOR = 100;
 
     uint256 public lastAddLiquidityTime;
     uint256 public targetLiquidity = 25;
@@ -923,8 +915,8 @@ contract GorilethToken is ERC20, Auth {
     bool public swapEnabled = true;
     bool public autoBuybackEnabled = true;
 
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
+    mapping(address => uint256) public balances;
+    mapping(address => mapping(address => uint256)) public allowances;
 
     mapping(address => bool) public buyBacker;
     mapping(address => bool) public isFeeExempt;
@@ -938,14 +930,14 @@ contract GorilethToken is ERC20, Auth {
     }
 
     modifier onlyBuybacker() {
-        require(buyBacker[_msgSender()] == true, "Not a buybacker");
+        require(buyBacker[_msgSender()], "Not a buybacker");
         _;
     }
     
     // Constructor
 
     constructor(
-        uint256 totalSupply_,
+        uint256 supply_,
         address autoLiquidityReceiver_,
         address marketingReceiver_,
         address treasuryReceiver_,
@@ -954,7 +946,7 @@ contract GorilethToken is ERC20, Auth {
     ERC20("GorilethToken", "Goken", 9)
     Auth(_msgSender()) {
 
-        uint256 setTotalSupply = totalSupply_ * 10 ** decimals();
+        uint256 setTotalSupply = supply_ * 10 ** decimals();
         _mint(_msgSender(), setTotalSupply);
 
         router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
@@ -973,9 +965,9 @@ contract GorilethToken is ERC20, Auth {
         treasuryReceiver = treasuryReceiver_;
         teamReceiver = teamReceiver_;
 
-        _allowances[address(this)][address(router)] = setTotalSupply;
-        _allowances[address(this)][address(pair)] = setTotalSupply;
-        _balances[_msgSender()] = setTotalSupply;
+        allowances[address(this)][address(router)] = setTotalSupply;
+        allowances[address(this)][address(pair)] = setTotalSupply;
+        balances[_msgSender()] = setTotalSupply;
         
         emit Transfer(ZERO, _msgSender(), setTotalSupply);
         emit TokenCreated(_msgSender(), address(this));
@@ -1013,12 +1005,12 @@ contract GorilethToken is ERC20, Auth {
     }
 
     function adjustExtraDistribution(uint256 xLiquidity_, uint256 xBuyback_, uint256 xTreasury_, uint256 xMarketing_, uint256 xTeam_) external authorized {
-        require(xLiquidity_ + xBuyback_ + xTreasury_ + xMarketing_ + xTeam_ <= 5, "Extra distribution cannot exceed 5%.");
+        require(xLiquidity_ + xBuyback_ + xTreasury_ + xMarketing_ + xTeam_ == 5, "Extra distribution must be a total of 5%.");
         xLiquidity = xLiquidity_;
         xBuyback = xBuyback_;
         xTreasury = xTreasury_;
         xMarketing = xMarketing_;
-        xTeam_ = xTeam_;
+        xTeam = xTeam_;
     }
 
     function setAutoBuybackSettings(bool enabled, uint256 cap, uint256 amount, uint256 period) external authorized {
@@ -1041,40 +1033,40 @@ contract GorilethToken is ERC20, Auth {
         buybackMultiplierTriggeredAt = 0;
     }
 
-    function setSwapBackSettings(bool _enabled, uint256 _amount) external authorized {
-        swapEnabled = _enabled;
-        swapThreshold = _amount;
+    function setSwapBackSettings(bool enabled, uint256 amount) external authorized {
+        swapEnabled = enabled;
+        swapThreshold = amount;
     }
 
-    function setTargetLiquidity(uint256 _target, uint256 _denominator) external authorized {
-        targetLiquidity = _target;
-        targetLiquidityDenominator = _denominator;
+    function setTargetLiquidity(uint256 target, uint256 denominator) external authorized {
+        targetLiquidity = target;
+        targetLiquidityDenominator = denominator;
     }
 
     /* Override ERC function */
 
     function balanceOf(address account) public view override returns (uint256) {
-        return _balances[account];
+        return balances[account];
     }
 
     function allowance(address holder, address spender) public view override returns (uint256) {
-        return _allowances[holder][spender];
+        return allowances[holder][spender];
     }
 
     function approve(address spender, uint256 amount) public override returns (bool) {
-        _allowances[_msgSender()][spender] = amount;
+        allowances[_msgSender()][spender] = amount;
         emit Approval(_msgSender(), spender, amount);
         return true;
     }
 
-    function transfer(address recipient, uint256 amount) public override returns (bool) {
+    function transfer(address recipient, uint256 amount) external override returns (bool) {
         return _transferFrom(_msgSender(), recipient, amount);
     }
 
-    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
-        if (_allowances[sender][_msgSender()] != totalSupply()) {
-            require(amount <= _allowances[sender][_msgSender()], "Insufficient Allowance");
-            _allowances[sender][_msgSender()] = _allowances[sender][_msgSender()] - amount;
+    function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
+        if (allowances[sender][_msgSender()] != totalSupply()) {
+            require(amount <= allowances[sender][_msgSender()], "Insufficient Allowance");
+            allowances[sender][_msgSender()] = allowances[sender][_msgSender()] - amount;
         }
 
         return _transferFrom(sender, recipient, amount);
@@ -1098,12 +1090,12 @@ contract GorilethToken is ERC20, Auth {
             triggerAutoBuyback();
         }
 
-        require(amount <= _balances[sender], "Insufficient Balance");
-        _balances[sender] = _balances[sender] - amount;
+        require(amount <= balances[sender], "Insufficient Balance");
+        balances[sender] = balances[sender] - amount;
 
         uint256 amountReceived = shouldTakeFee(sender) ? takeFee(sender, recipient, amount) : amount;
 
-        _balances[recipient] = _balances[recipient] + amountReceived;
+        balances[recipient] = balances[recipient] + amountReceived;
 
         emit Transfer(sender, recipient, amountReceived);
 
@@ -1111,9 +1103,9 @@ contract GorilethToken is ERC20, Auth {
     }
 
     function _basicTransfer(address sender, address recipient, uint256 amount ) internal returns (bool) {
-        require(amount <= _balances[sender], "Insufficient Balance");
-        _balances[sender] = _balances[sender] - amount;
-        _balances[recipient] = _balances[recipient] + amount;
+        require(amount <= balances[sender], "Insufficient Balance");
+        balances[sender] = balances[sender] - amount;
+        balances[recipient] = balances[recipient] + amount;
         emit Transfer(sender, recipient, amount);
         return true;
     }
@@ -1125,7 +1117,7 @@ contract GorilethToken is ERC20, Auth {
     }
 
     function shouldSwapBack() internal view returns (bool) {
-        return _msgSender() != pair && !inSwap && swapEnabled && _balances[address(this)] >= swapThreshold;
+        return _msgSender() != pair && !inSwap && swapEnabled && balances[address(this)] >= swapThreshold;
     }
 
     function shouldAutoBuyback() internal view returns (bool) {
@@ -1147,9 +1139,9 @@ contract GorilethToken is ERC20, Auth {
     }
 
     function takeFee(address sender, address receiver, uint256 amount) internal returns (uint256) {
-        uint256 feeAmount = (amount * getTotalFee(receiver == pair)) / feeDenominator;
+        uint256 feeAmount = (amount * getTotalFee(receiver == pair)) / FEEDENOMINATOR;
 
-        _balances[address(this)] = _balances[address(this)] + feeAmount;
+        balances[address(this)] = balances[address(this)] + feeAmount;
         
         emit Transfer(sender, address(this), feeAmount);
 
@@ -1159,24 +1151,24 @@ contract GorilethToken is ERC20, Auth {
     function getMultipliedFee() public view returns (uint256) {
         if (buybackMultiplierTriggeredAt + buybackMultiplierLength > block.timestamp) {
             uint256 remainingTime = buybackMultiplierTriggeredAt + buybackMultiplierLength - block.timestamp;
-            uint256 feeIncrease = ((totalFee * buybackMultiplierNumerator) / buybackMultiplierDenominator) - totalFee;
-            return ((totalFee * 150) / 100) + ((feeIncrease * remainingTime) / buybackMultiplierLength);
+            uint256 feeIncrease = ((TOTALFEE * buybackMultiplierNumerator) / buybackMultiplierDenominator) - TOTALFEE;
+            return ((TOTALFEE * 150) / 100) + ((feeIncrease * remainingTime) / buybackMultiplierLength);
         }
-        return (totalFee * 150) / 100;
+        return (TOTALFEE * 150) / 100;
     }
 
     function getTotalFee(bool selling) public view returns (uint256) {
         if (selling) {
             return getMultipliedFee();
         }
-        return totalFee;
+        return TOTALFEE;
     }
 
     /* Internal function */
 
     function swapBack() internal swapping {
-        uint256 dynamicLiquidityFee = isOverLiquified(targetLiquidity, targetLiquidityDenominator) ? 0 : baseFee + xLiquidity;
-        uint256 amountToLiquify = ((swapThreshold * dynamicLiquidityFee) / totalFee) / 2;
+        uint256 dynamicLiquidityFee = isOverLiquified(targetLiquidity, targetLiquidityDenominator) ? 0 : BASEFEE + xLiquidity;
+        uint256 amountToLiquify = ((swapThreshold * dynamicLiquidityFee) / TOTALFEE) / 2;
         uint256 amountToSwap = swapThreshold - amountToLiquify;
 
         address[] memory path = new address[](2);
@@ -1188,12 +1180,12 @@ contract GorilethToken is ERC20, Auth {
 
         uint256 amountBNB = address(this).balance - balanceBefore;
 
-        uint256 totalBNBFee = totalFee - (dynamicLiquidityFee / 2);
+        uint256 totalBNBFee = TOTALFEE - (dynamicLiquidityFee / 2);
 
         uint256 amountBNBLiquidity = ((amountBNB * dynamicLiquidityFee) / totalBNBFee) / 2;
-        uint256 amountBNBTreasury = (amountBNB * (baseFee + xTreasury)) / totalBNBFee;
-        uint256 amountBNBTeam = (amountBNB * (baseFee + xTeam)) / totalBNBFee;
-        uint256 amountBNBMarketing = (amountBNB * (baseFee + xMarketing)) / totalBNBFee;
+        uint256 amountBNBTreasury = (amountBNB * (BASEFEE + xTreasury)) / totalBNBFee;
+        uint256 amountBNBTeam = (amountBNB * (BASEFEE + xTeam)) / totalBNBFee;
+        uint256 amountBNBMarketing = (amountBNB * (BASEFEE + xMarketing)) / totalBNBFee;
         
         payable(treasuryReceiver).transfer(amountBNBTreasury);
         payable(teamReceiver).transfer(amountBNBTeam);
