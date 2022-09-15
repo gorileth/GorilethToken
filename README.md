@@ -1,1 +1,1 @@
-# GorilethToken
+# Gorileth Token (Goken)
